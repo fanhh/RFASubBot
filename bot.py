@@ -28,7 +28,7 @@ client = slack_sdk.WebClient(token=os.environ['SLACK_BOT_TOKEN'])
 
 # global
 request_status = {}
-teachers = ["U05SXKVEHMX"] # working on it to find a way to auto load all the teacher info in
+teachers = [] # working on it to find a way to auto load all the teacher info in
 
 app_token = os.environ["SLACK_APP_TOKEN"]
 socket_mode_client = SocketModeClient(
