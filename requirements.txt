@@ -1,0 +1,6 @@
+mysql-connector-python
+redis
+slack_sdk
+slack_bolt
+pandas
+sqlalchemy
