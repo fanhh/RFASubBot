@@ -32,6 +32,9 @@ def fetch_teachers_from_db(db_config):
         return []
 
 def update_redis_cache(cache, teachers):
+    # empty out the current cache
+    # update with new info
+    cache.flushall()
     for teacher in teachers:
         try:
             cache.set(f"teacher:{teacher[0]}", teacher[1])
