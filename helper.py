@@ -2,12 +2,18 @@ import redis
 import uuid
 from slack_sdk.errors import SlackApiError
 import logging
+import os
+import time
+import json
 
 # clound cache set up
 
-
-
-
+def set_up_cache_cloud():
+    # need a redis cloud server instance to retrieve the host, port and password
+    redis_host = os.getenv('REDIS_HOST')
+    redis_port = os.getenv('REDIS_PORT')
+    redis_password = os.getenv('REDIS_PASSWORD')
+    return redis.Redis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
 
 # local cache setup
 def set_up_cache_local():
@@ -59,9 +65,18 @@ def process_find_subs_command(body, logger, cache, app):
     acknowledge = app.client.conversations_open(users=[requester_id])
     requester_dm = acknowledge["channel"]['id']
     app.client.chat_postMessage(channel=requester_dm, text= f"Hello, {requester_name} the bot is Wokring on find subs for you now!")
-    unique_id = generate_unique_id()
-   
+    app.client.chat_postMessage(channel=requester_dm, text= (f"Hello, can you provide the zoom link and time in the following format: zoom link: , time: 
+                                                             Example: zoom link: https://zoom.us/j/1234567890, time: 12:00pm"))
+    #unique_id = generate_unique_id()
+    data = {
+    "zoom_link": "",
+    "time": ""
+    }
+    serialized_data = json.dumps(data)
 
+    # expires in 7 days, free up memory
+    cache.setex(f"request:{requester_id}", 604800, serialized_data)
+    time.sleep(5)
     for key in cache.scan_iter("teacher:*"):
         # since the cache store the data as byte then
         # we need to decode it as utf-8
@@ -78,12 +93,9 @@ def process_find_subs_command(body, logger, cache, app):
         # open the dm
         response = app.client.conversations_open(users=[teacher_id])
         dm_id = response["channel"]['id']
-        req = app.client.chat_postMessage(channel=dm_id, text=f"request:{unique_id}, hello {teacher_name}! Can you subs for {requester_name} class? Thumbs up the message or reply yes")
+        req = app.client.chat_postMessage(channel=dm_id, text=f"request:{requester_id}, hello {teacher_name}! Can you subs for {requester_name} class? Thumbs up the message or reply yes")
         logging.info(req)
 
-    # cached the request
-    # expires in 7 days, free up memory
-    cache.setex(f"request:{unique_id}", 604800, "Zoom Link")
 
 # Function to add a teacher
 def add_teacher(teacher_id, teacher_data, cache):
@@ -91,7 +103,7 @@ def add_teacher(teacher_id, teacher_data, cache):
 
 # Function to add a request
 def add_request(request_id, request_data, cache):
-    cache.set(f"request:{request_id}", request_data)
+    cache.set(f"request:{request_id}", 604800, request_data)
 
 # sent sub request to all the teacher
 def sent_request(cache, app, requester_id):
@@ -130,9 +142,25 @@ def sub_confirmed(cache, app, user):
 
 # sent zoom link    
 def sent_zoom_link(cache, id, client, request_key):
-    client.chat_postMessage(channel=id, text=f"Thanks for filling the request, Here is the zoom link{cache.get(request_key).decode('utf-8')}")
-    # free the memory
-    cache.delete(request_key)
+    
+    serialized_data = cache.get(f"request:{request_key}")
+    
+    # Check if the data exists
+    if serialized_data:
+        # Deserialize the JSON string back into a Python dictionary
+        data = json.loads(serialized_data.decode('utf-8'))
+        
+        # Access the Zoom link and time from the dictionary
+        zoom_link = data.get("zoom_link", "No Zoom link provided")
+        meeting_time = data.get("time", "No time provided")
+        
+        client.chat_postMessage(channel=id, text=f"Here is the Zoom link: {zoom_link}, and the time: {meeting_time}.")
+        
+        # Free the memory
+        cache.delete(f"request:{request_key}")
+    else:
+        # Handle the case where data might not be found (e.g., expired or never set)
+        client.chat_postMessage(channel=id, text="Sorry, This request has expired.")
 
 
 

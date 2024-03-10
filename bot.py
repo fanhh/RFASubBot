@@ -8,6 +8,8 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 import logging
 import threading
 import helper
+import re
+import json
 
 
 
@@ -22,8 +24,9 @@ Local testing cache
 
 cache = helper.set_up_cache_local()
 cache.flushall() # empty out the cache for testing
-cache.set('teacher:slack id', "full name")
-cache.set('teacher:slack id', "full name")
+cache.set('teacher:U032W58LZU6', "Jason")
+cache.set('teacher:U05LSGZRL4C', "Joesph")
+
 logging.info(cache)
 
 """
@@ -63,6 +66,7 @@ def handle_raction(body, logger):
         thread = threading.Thread(target=helper.request_verification, args=(body, client, cache, app))
         thread.start()
         # no need to lock the memory the redis handles it nativly
+    logging.info(cache)
         
          
 
@@ -75,6 +79,46 @@ def find_subs_command(ack, body, logger):
     # Scaling requests handle
     thread = threading.Thread(target=helper.process_find_subs_command, args=(body, logger, cache, app))
     thread.start()
+    logging.info(cache)
+
+
+def handle_message_event(event, logger, cache, app):
+    user_id = event['user']
+    text = event['text']
+    channel_id = event['channel']
+
+    # Regular expression to match a Zoom link and time
+    zoom_link_pattern = r'zoom link: (https?://\S+), time: (\S+)'
+    match = re.search(zoom_link_pattern, text, re.IGNORECASE)
+
+    if match:
+        zoom_link = match.group(1)
+        meeting_time = match.group(2)
+
+        # Update the correct cache entry
+        for key in cache.scan_iter("request:*"):
+            serialized_data = cache.get(key).decode('utf-8')
+            data = json.loads(serialized_data)
+            
+            # Check if this request corresponds to the user_id
+            # This requires your request data to have a 'user_id' key or a similar mechanism
+            if key == user_id:
+                # Update the data with the new Zoom link and time
+                data.update({
+                    "zoom_link": zoom_link,
+                    "time": meeting_time
+                })
+                
+                # Serialize the updated dictionary and save it back to Redis
+                cache.setex(key, 604800, json.dumps(data))
+                
+                # Send a confirmation message back to the user
+                app.client.chat_postMessage(channel=channel_id, text=f"Thanks! I've received the Zoom link: {zoom_link} and time: {meeting_time}.")
+                break
+@app.event("message")
+def handle_message(body, logger, cache, app):
+    event = body['event']
+    handle_message_event(event, logger, cache)
 
 
 
