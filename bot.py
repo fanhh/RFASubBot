@@ -10,23 +10,20 @@ import threading
 import helper
 import re
 import json
-
-
+from slack_sdk.errors import SlackApiError
+from background_worker import worker
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 
 # set up cache
 """
-Local testing cache
-
+Local
 """
-
 cache = helper.set_up_cache_local()
 cache.flushall() # empty out the cache for testing
-cache.set('teacher:U032W58LZU6', "Jason")
-cache.set('teacher:U05LSGZRL4C', "Joesph")
-
+cache.set('teacher:U06BUPTPKRU', "x1")
+cache.set('teacher:U05SXKVEHMX', "x2")
 logging.info(cache)
 
 """
@@ -82,152 +79,20 @@ def find_subs_command(ack, body, logger):
     logging.info(cache)
 
 
-def handle_message_event(event, logger, cache, app):
-    user_id = event['user']
-    text = event['text']
-    channel_id = event['channel']
 
-    # Regular expression to match a Zoom link and time
-    zoom_link_pattern = r'zoom link: (https?://\S+), time: (\S+)'
-    match = re.search(zoom_link_pattern, text, re.IGNORECASE)
 
-    if match:
-        zoom_link = match.group(1)
-        meeting_time = match.group(2)
-
-        # Update the correct cache entry
-        for key in cache.scan_iter("request:*"):
-            serialized_data = cache.get(key).decode('utf-8')
-            data = json.loads(serialized_data)
-            
-            # Check if this request corresponds to the user_id
-            # This requires your request data to have a 'user_id' key or a similar mechanism
-            if key == user_id:
-                # Update the data with the new Zoom link and time
-                data.update({
-                    "zoom_link": zoom_link,
-                    "time": meeting_time
-                })
-                
-                # Serialize the updated dictionary and save it back to Redis
-                cache.setex(key, 604800, json.dumps(data))
-                
-                # Send a confirmation message back to the user
-                app.client.chat_postMessage(channel=channel_id, text=f"Thanks! I've received the Zoom link: {zoom_link} and time: {meeting_time}.")
-                break
 @app.event("message")
-def handle_message(body, logger, cache, app):
-    event = body['event']
-    handle_message_event(event, logger, cache)
+def handle_message(body, logger):
+    helper.handle_messageZoom_event(body, logger, cache, app)
+    logging.info(cache)
 
-
-
-
-"""
-Time Eplashed del in the request to free up memory
-Scale up the request handling and have threading prevention since the
-convert the entire server into a statless server so that it can scale within cloud
-"""
     
 
 
 if __name__ == "__main__":
+    # app = App(token=os.environ["SLACK_BOT_TOKEN"])
+
+    # worker_thread = threading.Thread(target=worker, args=(cache, app, logging))
+    # worker_thread.start()
+
     SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
-
-
-
-
-
-"""
-
-Functions that I moved to a different py file for code readablity and maintainablitry
-
-"""
-
-"""def is_response_to_bot_message(id, original_message_id):
-    # Logic to verify if the response is for the correct message
-    return id == original_message_id"""
-
-
-"""def request_verification(payload):
-    logging.info(f"Payload: {payload}")
-    item = payload['event']['item']
-    channel_id = item.get('channel')
-    message_ts = item.get('ts')
-    dm_id = payload['event']['user']
-
-    if not channel_id or not message_ts:
-        logging.error("Required keys 'channel' or 'ts' not found in the payload's 'item'.")
-        return
-
-    try:
-        # Fetching the original message using Slack API
-        result = client.conversations_history(channel=channel_id, latest=message_ts, limit=1, inclusive=True)
-        if result['messages']:
-            original_message = result['messages'][0]['text']
-            unique_request_code = original_message.split(",")[0]
-            logging.info(f"Original code in DM: {unique_request_code}")
-            logging.info("Original code in DM: " + unique_request_code)
-            if cache.exists(unique_request_code):
-                helper.sub_confirmed(cache, app, dm_id)
-                helper.sent_zoom_link(cache, dm_id, client, unique_request_code)
-        else:
-            logging.info("No messages found in the history for the given timestamp.")
-    except SlackApiError as e:
-        logging.error(f"Error retrieving message in DM: {e}")
-    else:
-        logging.info("Payload does not contain expected 'item' structure or 'channel' key.")"""
-
-
-"""def process_find_subs_command(body, logger):
-    global cache
-
-    requester_id = body['user_id']
-    requester_name = cache.get(f"teacher:{requester_id}").decode('utf-8')
-
-    acknowledge = app.client.conversations_open(users=[requester_id])
-    requester_dm = acknowledge["channel"]['id']
-    app.client.chat_postMessage(channel=requester_dm, text= f"Hello, {requester_name} the bot is Wokring on find subs for you now!")
-    unique_id = helper.generate_unique_id()
-   
-
-    for key in cache.scan_iter("teacher:*"):
-        # since the cache store the data as byte then
-        # we need to decode it as utf-8
-        teacher_name = cache.get(key).decode('utf-8')
-        teacher_id = key.decode('utf-8').split(':')[1]
-        logging.info(f"teacher info{teacher_id}")
-        try:
-            if teacher_id == requester_id:
-                continue
-        except SlackApiError as e:
-            logger.error(f"Error with user ID {teacher_id}: {e}")
- 
-        logging.info(f"{teacher_id} : {teacher_name}")
-        # open the dm
-        response = app.client.conversations_open(users=[teacher_id])
-        dm_id = response["channel"]['id']
-        req = app.client.chat_postMessage(channel=dm_id, text=f"request:{unique_id}, hello {teacher_name}! Can you subs for {requester_name} class? Thumbs up the message or reply yes")
-        logging.info(req)
-
-    # cached the request
-    # expires in 7 days, free up memory
-    cache.setex(f"request:{unique_id}", 604800, "Zoom Link")"""
-
-
-"""
-
-leaving this out for now, since the reaction handles it all
-@app.event("message")
-def handle_message_events(body, logger):
-    logger.info(f"message{body}")
-    event = body['event']
-  
-
-    # Check if the message is a response to a sub request
-    if event['channel_type'] == 'im' and event['text'].lower() == 'yes':
-        thread = threading.Thread(target=request_verification, args=(body,))
-        thread.start()
-        # no need to lock the memory the redis handles it nativly
-        
-"""
