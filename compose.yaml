@@ -2,11 +2,11 @@ services:
     app:
       build: .
       ports:
-        - "8000:8000"  # Expose the app on port 8000
+        - "8000:8000"  # Expose the app on port 8000 or any other port
       environment:
-        - SLACK_BOT_TOKEN=xoxb-5926032436144-5924651740995-sJEbU4DvCRbc4Wuv5mMVxIQt
-        - SLACK_SIGNING_SECRET=2a88546d146c6ed09c5e799f56f4bbbf
-        - SLACK_APP_TOKEN=xapp-1-A05T6JVQGCS-5938328356229-dc48882c2c6c1028d542afa960b9e8fe78d3eadc5d901c0f25b9f0c27cd658b1
+        - SLACK_BOT_TOKEN= # enter the slakc bot token
+        - SLACK_SIGNING_SECRET= # enter the slack signing secret
+        - SLACK_APP_TOKEN= # enter the slack app token
         - REDIS_HOST=redis  # Use the service name `redis` as the hostname for connecting
       depends_on:
         - redis
