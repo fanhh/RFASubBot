@@ -18,6 +18,17 @@ logging.basicConfig(level=logging.DEBUG)
 
 # set up cache
 """
+To set it up to run in vm
+cache = helper.set_up_cache_cloud()
+path = Path to your data
+data = pd.read_csv(path)
+teachers = helper.clean_data(data)
+for index, teacher in teachers.iterrows():
+    cache.set(f"teacher:{teacher['Slack ID (RFA)']}", teacher['Teachers'])
+
+that will set all the teacher data in the cache
+"""
+"""
 Local
 """
 cache = helper.set_up_cache_local()
